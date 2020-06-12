@@ -8,7 +8,7 @@ import os
 import tqdm                                             # I want a tiny little neat progress bar so I imported this.
 from sklearn.linear_model import LogisticRegression     # For comparison here.
 
-def read_data(path):
+def read_data(path, separator):
     # Kinda generic raw-data parser.
     # PhraseId SentenceId Phrase Sentiment
     # 0 1 2 3
@@ -26,8 +26,11 @@ def read_data(path):
 
     print("Processing raw-data...")
 
-    for line in tqdm.tqdm(lines, ascii=True):
-        data.append(line.split("	"))     # If we're reading stopwords, this line really doesn't matter.
+    if separator:
+        for line in tqdm.tqdm(lines, ascii=True):
+            data.append(line.split(separator))
+    else:
+        data = lines
 
     return data
 
@@ -273,15 +276,18 @@ class SoftmaxRegression(object):
         return [ary[r] for ary in arrays]
 
 def main():
+    # Define paths.
     train_dataset_path = "./datasets/train.tsv"
     test_dataset_path = "./datasets/test.tsv"
+    test_ground_truth_path = "./datasets/sampleSubmission.csv"
     stopwords_path = "./stopwords.txt"
 
     print("Reading data...")
 
-    train_dataset = read_data(train_dataset_path)[1:]   # Remove title row.
-    test_dataset = read_data(test_dataset_path)[1:]     # Same.
-    stopwords = sum(read_data(stopwords_path), [])  # Flatten stopwords
+    # Read datasets.
+    train_dataset = read_data(train_dataset_path, "	")[1:]          # Remove title row.
+    test_dataset = read_data(test_dataset_path, "	")[1:]          # Same.
+    stopwords = read_data(stopwords_path, "")
 
     # Check if we have made our delicious pickles
     if not os.path.exists("./data") or not os.path.exists("./data/vectorizer.pkl"):
@@ -297,11 +303,18 @@ def main():
     x_train = vectorizer.features
     y_train = np.array([int(train_dataset[i][3]) for i in range(len(train_dataset))])
 
-    x_test = x_train[0:10000]    # Reserve some data for validating.
-    y_test = y_train[0:10000]
+    x_test = x_train[0:10000]       # Reserve some data for validating.
+    y_test = y_train[0:10000]       # Note: This is for making submission. Normally you will want to
+                                    #       split train-test set. See comments below.
 
-    x_train = x_train[10000:]
-    y_train = y_train[10000:]
+    # x_test = x_train[0:10000]    # Reserve some data for validating.
+    # y_test = y_train[0:10000]
+
+    # x_train = x_train[10000:]
+    # y_train = y_train[10000:]
+
+    # This is for predicting test set for submission.
+    x_sub = vectorizer.vectorize([test_dataset[i][2] for i in range(len(test_dataset))])
 
     print("Train set shape: " + str(np.shape(x_train)))
     print("Test set shape: " + str(np.shape(x_test)))
@@ -315,16 +328,37 @@ def main():
     print("Sklearn accuracy: " + str(model.score(x_test, y_test)))
 
     # With implementation I'm getting a score of 0.6434.
+    # You can of course load the pkl you dumped last time. I'm getting lazy here.
     print("Using implementation: ")
     classifier = SoftmaxRegression(eta=0.01, epochs=100, minibatches=1000, random_seed=0)
     classifier.fit(x_train, y_train)
     y_pred = classifier.predict(x_test)
     print("Implemention accuracy: " + str(np.asarray(y_pred == y_test).mean()))
 
+    # Save model for furthur usage.
     if not os.path.exists("./model"):
         os.mkdir("./model")
 
     pickle.dump(classifier, open("./model/model.pkl", "wb"))
+
+    y_sub = classifier.predict(x_sub)
+
+    # Dump submission csv.
+    # Really stupid approach.
+    csv = []
+    csv.append("PhraseId,Sentiment")
+    i = 0
+    for line in test_dataset:
+        pharse_id = line[0]
+        prediction = y_pred[i]
+
+        csv.append("{0},{1}".format(pharse_id, prediction))
+
+        i += 1
+    
+    csv.append("")
+    with open("submission.csv", "w") as outfile:
+        outfile.write("\n".join(csv))
 
 if __name__ == "__main__":
     main()

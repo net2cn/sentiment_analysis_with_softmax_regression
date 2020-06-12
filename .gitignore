@@ -4,3 +4,4 @@ datasets
 *.log
 *.pkl
 *.png
+*.csv
