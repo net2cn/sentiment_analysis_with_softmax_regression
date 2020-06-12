@@ -350,7 +350,7 @@ def main():
     i = 0
     for line in test_dataset:
         pharse_id = line[0]
-        prediction = y_pred[i]
+        prediction = y_sub[i]
 
         csv.append("{0},{1}".format(pharse_id, prediction))
 
